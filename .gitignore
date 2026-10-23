@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+*.db
+# Current project data is intentionally included in the repository.
+!backend/hrm.db
+*.db-shm
+*.db-wal
+.env
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+artifacts/
+media/*
+!media/.gitkeep

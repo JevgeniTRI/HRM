@@ -1,0 +1,20 @@
+{
+  "snapshot_date": "2026-10-23",
+  "database": "backend/hrm.db",
+  "sha256": "3a619470c3112a0bf8d19abc3280578838e1df573e4ab2b9ead71a7751fb7582",
+  "alembic_revision": "0005",
+  "row_counts": {
+    "accounts": 4,
+    "activities": 41,
+    "alembic_version": 1,
+    "auth_sessions": 0,
+    "certificates": 0,
+    "departments": 4,
+    "employee_skills": 40,
+    "employees": 12,
+    "skills": 8,
+    "task_departments": 10,
+    "tasks": 6
+  },
+  "active_sessions_included": false
+}

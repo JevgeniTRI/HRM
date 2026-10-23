@@ -1,0 +1,30 @@
+import { expect, test } from './fixtures';
+
+test('department and skill catalogs support creation, editing and deletion', async ({ page }) => {
+  await page.goto('/departments');
+  await page.getByRole('button', { name: 'Добавить подразделение', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill('Тестовая команда');
+  await dialog.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Тестовая команда' })).toBeVisible();
+  await page.getByRole('button', { name: 'Редактировать Тестовая команда' }).click();
+  await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill('Новая команда');
+  await dialog.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новая команда' })).toBeVisible();
+  await page.getByRole('button', { name: 'Удалить Новая команда' }).click();
+  await dialog.getByRole('button', { name: 'Удалить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новая команда' })).not.toBeVisible();
+  await page.goto('/skills');
+  await page.getByRole('button', { name: 'Добавить навык', exact: true }).click();
+  await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill('Тестовая компетенция');
+  await dialog.getByRole('combobox', { name: 'Категория', exact: true }).fill('Гибкие навыки');
+  await dialog.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Тестовая компетенция' })).toBeVisible();
+  await page.getByRole('button', { name: 'Редактировать Тестовая компетенция' }).click();
+  await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill('Новая компетенция');
+  await dialog.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новая компетенция' })).toBeVisible();
+  await page.getByRole('button', { name: 'Удалить Новая компетенция' }).click();
+  await dialog.getByRole('button', { name: 'Удалить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Новая компетенция' })).not.toBeVisible();
+});
