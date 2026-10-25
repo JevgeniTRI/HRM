@@ -36,6 +36,7 @@ def skill_metrics(session) -> list[SkillMetric]:
             at_target=at_target or 0,
             coverage=coverage(at_target or 0, assigned),
             average_level=round(average, 1) if average is not None else None,
+            scale=skill.scale,
         )
         for skill, assigned, assessed, at_target, average in rows
     ]

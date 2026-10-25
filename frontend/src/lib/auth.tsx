@@ -18,6 +18,9 @@ export interface Account {
   employee_id: number | null;
   is_active: boolean;
 }
+export interface AccountSummary extends Account {
+  employee_name: string | null;
+}
 export interface Identity extends Account {
   display_name: string;
   department_id: number | null;

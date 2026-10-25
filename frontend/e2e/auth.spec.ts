@@ -63,6 +63,16 @@ test.beforeAll(async ({ request }) => {
     expect(response.status()).toBe(201);
     accounts.push(await response.json());
   }
+  for (const [employee, kind, manager_id] of [
+    [people[1].id, 'head', null],
+    [people[2].id, 'intermediate', people[1].id],
+    [people[0].id, 'employee', people[2].id],
+  ] as const) {
+    const response = await request.put(`/api/employees/${employee}/organization`, {
+      data: { kind, manager_id },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
 });
 
 test('login errors, administrator account controls and logout', async ({ page }) => {
@@ -102,6 +112,40 @@ test('login errors, administrator account controls and logout', async ({ page })
   await expect(page.getByRole('heading', { name: 'Вход в рабочее пространство' })).toBeVisible();
   await page.goto('/employees');
   await expect(page.getByRole('heading', { name: 'Вход в рабочее пространство' })).toBeVisible();
+});
+
+test('account search filters immediately by employee names and username', async ({ page }) => {
+  await signIn(page, 'admin', 'E2e-admin-password-2026');
+  await page.goto('/accounts');
+  const search = page.getByRole('searchbox', {
+    name: 'Поиск пользователей по имени, фамилии или логину',
+  });
+  await expect(page.getByRole('cell', { name: 'browser-0', exact: true })).toBeVisible();
+  const rows = page.locator('tbody tr');
+  const total = await rows.count();
+  await search.fill(people[0].first_name.slice(0, 1));
+  await expect(page.getByRole('cell', { name: 'browser-0', exact: true })).toBeVisible();
+  await expect(rows).not.toHaveCount(total);
+  for (const name of await rows.locator('a').allTextContents()) {
+    expect(name).toMatch(new RegExp(people[0].first_name.slice(0, 1), 'iu'));
+  }
+  for (const query of [
+    people[0].first_name,
+    people[0].last_name.toLocaleUpperCase('ru'),
+    `  ${people[0].last_name}   ${people[0].first_name}  `,
+  ]) {
+    await search.fill(query);
+    await expect(rows).toHaveCount(1);
+    await expect(page.getByRole('cell', { name: 'browser-0', exact: true })).toBeVisible();
+  }
+  await search.fill('browser-0');
+  await expect(rows).toHaveCount(1);
+  await expect(page.getByRole('cell', { name: 'browser-0', exact: true })).toBeVisible();
+  await search.fill('несуществующий-сотрудник');
+  await expect(page.getByText('Пользователи не найдены', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Очистить поиск пользователей' }).click();
+  await expect(search).toHaveValue('');
+  await expect(rows).toHaveCount(total);
 });
 
 test('employee sees their resume and tasks, edits resume and cannot open their manager', async ({
@@ -156,10 +200,13 @@ test('employee sees their resume and tasks, edits resume and cannot open their m
   }
 });
 
-test('manager sees only their department and can edit a peer manager', async ({ page }) => {
+test('manager sees their reporting tree and can edit a subordinate manager', async ({ page }) => {
   await signIn(page, 'browser-1');
-  await page.getByRole('navigation').getByRole('link', { name: 'Мой отдел', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Мой отдел', exact: true })).toBeVisible();
+  await page
+    .getByRole('navigation')
+    .getByRole('link', { name: 'Моя команда', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Моя команда', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Добавить сотрудника', exact: true })).toHaveCount(
     0,
   );

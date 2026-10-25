@@ -11,7 +11,7 @@ from app.models import Certificate, Employee, EmployeeSkill
 from app.services.common import commit, record_activity, require_record
 from app.storage import certificate_path, remove_files
 
-MAX_FILE_SIZE = 10 * 1024 * 1024
+MAX_FILE_SIZE = 15 * 1024 * 1024
 FILE_TYPES = {
     ".pdf": "application/pdf",
     ".png": "image/png",
@@ -102,7 +102,7 @@ def upload_certificate(
             while chunk:
                 size += len(chunk)
                 if size > MAX_FILE_SIZE:
-                    raise PayloadTooLargeError("Размер сертификата не должен превышать 10 МБ")
+                    raise PayloadTooLargeError("Размер сертификата не должен превышать 15 МБ")
                 output.write(chunk)
                 chunk = stream.read(64 * 1024)
         certificate = Certificate(

@@ -23,7 +23,6 @@ class LearningFormat(StrEnum):
 class Currency(StrEnum):
     EUR = "EUR"
     USD = "USD"
-    UAH = "UAH"
     GBP = "GBP"
 
 

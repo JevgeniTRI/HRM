@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -59,6 +60,22 @@ def summary(session: DB, filters: Filters):
     return service.summarize_tasks(session, **filters)
 
 
+@router.get("/calendar", response_model=TaskPage)
+def calendar(
+    session: DB,
+    filters: Filters,
+    from_on: date,
+    to_on: date,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 100,
+):
+    if to_on < from_on:
+        raise HTTPException(422, "Конец периода не может быть раньше начала")
+    return service.calendar_tasks(
+        session, from_on=from_on, to_on=to_on, page=page, page_size=page_size, **filters
+    )
+
+
 @router.post("/estimate", response_model=EffortRead)
 def estimate(data: EffortEstimate):
     return service.estimate_effort(data)
@@ -92,18 +109,14 @@ def validate_assignment(data: TaskWrite, session, existing=False):
     actor = session.info["actor"]
     if actor.role == "employee" and data.assignee_id != actor.employee_id:
         raise HTTPException(403, "Можно создавать задачи только для себя")
-    if (
-        not actor.global_access
-        and not existing
-        and any(d != actor.department_id for d in data.department_ids)
-    ):
-        raise HTTPException(403, "Можно назначать задачи только своему отделу")
-    if (
-        actor.role == "manager"
-        and data.assignee_id is None
-        and data.department_ids != [actor.department_id]
-    ):
-        raise HTTPException(422, "Выберите исполнителя или свой отдел")
+    if not actor.global_access and not existing:
+        allowed = set(
+            session.scalars(select(Employee.department_id).where(employee_scope(session))).all()
+        )
+        if any(department not in allowed for department in data.department_ids):
+            raise HTTPException(403, "Можно выбирать только подразделения доступных сотрудников")
+    if actor.role == "manager" and data.assignee_id is None:
+        raise HTTPException(422, "Выберите исполнителя из своей команды")
     if data.assignee_id is not None:
         person = session.scalar(
             select(Employee).where(Employee.id == data.assignee_id, employee_scope(session))

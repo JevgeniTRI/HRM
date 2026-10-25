@@ -135,10 +135,10 @@ test('upload validation keeps the dialog open and allows retry', async ({ page }
   await dialog.getByLabel('Файл сертификата').setInputFiles({
     name: 'huge.pdf',
     mimeType: 'application/pdf',
-    buffer: Buffer.alloc(10 * 1024 * 1024 + 1),
+    buffer: Buffer.alloc(15 * 1024 * 1024 + 1),
   });
   await dialog.getByRole('button', { name: 'Загрузить сертификат' }).click();
-  await expect(dialog.getByRole('alert')).toContainText('до 10 МБ');
+  await expect(dialog.getByRole('alert')).toContainText('до 15 МБ');
   await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click();
   await expect(dialog).not.toBeVisible();
 });

@@ -137,8 +137,8 @@ export function CertificateUpload({
   });
   function save() {
     if (upload.isPending || !file || !skillId) return;
-    if (file.size === 0 || file.size > 10 * 1024 * 1024) {
-      setValidation(new Error('Выберите непустой файл размером до 10 МБ.'));
+    if (file.size === 0 || file.size > 15 * 1024 * 1024) {
+      setValidation(new Error('Выберите непустой файл размером до 15 МБ.'));
       return;
     }
     if (!/\.(pdf|png|jpe?g|webp)$/i.test(file.name)) {
@@ -195,7 +195,7 @@ export function CertificateUpload({
         />
       </label>
       <p className="field-hint">
-        PDF, PNG, JPG или WebP · до 10 МБ. Можно добавить несколько сертификатов к одному навыку.
+        PDF, PNG, JPG или WebP · до 15 МБ. Можно добавить несколько сертификатов к одному навыку.
       </p>
       <FormError error={validation ?? upload.error} />
       <button

@@ -2,6 +2,7 @@ import { ArrowRight, ArrowUpRight, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { SkillMetric } from '../../types';
 import { Empty } from '../ui';
+import { levelLabel } from '../../lib/skillScales';
 
 export function SkillOverview({ metrics }: { metrics: SkillMetric[] }) {
   return (
@@ -54,21 +55,31 @@ export function SkillOverview({ metrics }: { metrics: SkillMetric[] }) {
                   </td>
                   <td>
                     <div className="level-display">
-                      <strong>{metric.average_level ?? '—'}</strong>
+                      <strong>
+                        {metric.average_level === null
+                          ? '—'
+                          : levelLabel(metric.scale, metric.average_level)}
+                      </strong>
                       <span className="level-dots" aria-hidden="true">
                         {[1, 2, 3, 4, 5].map((index) => (
                           <i
                             key={index}
                             className={
                               metric.average_level !== null &&
-                              index <= Math.round(metric.average_level)
+                              index <=
+                                Math.round(
+                                  (metric.scale.max === metric.scale.min
+                                    ? 1
+                                    : (metric.average_level - metric.scale.min) /
+                                      (metric.scale.max - metric.scale.min)) * 5,
+                                )
                                 ? 'filled'
                                 : ''
                             }
                           />
                         ))}
                       </span>
-                      <span className="muted">/ 5</span>
+                      <span className="muted">/ {levelLabel(metric.scale, metric.scale.max)}</span>
                     </div>
                   </td>
                   <td>

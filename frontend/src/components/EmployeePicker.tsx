@@ -10,25 +10,48 @@ export function EmployeePicker({
   onChange,
   required = false,
   label = 'Сотрудник',
+  managersOnly = false,
+  excludeId,
+  emptyLabel = 'Не назначен',
+  departmentId,
 }: {
   value: number | null;
   onChange: (id: number | null) => void;
   required?: boolean;
   label?: string;
+  managersOnly?: boolean;
+  excludeId?: number;
+  emptyLabel?: string;
+  departmentId?: number;
 }) {
   const [search, setSearch] = useState('');
   const q = useDebouncedValue(search);
   const list = useQuery({
-    queryKey: ['employee-picker', q],
-    queryFn: () => api.employees({ q, page_size: 100 }),
+    queryKey: ['employee-picker', q, managersOnly, departmentId],
+    queryFn: () =>
+      api.employees({
+        q,
+        page_size: 100,
+        is_manager: managersOnly ? true : undefined,
+        department_id: departmentId?.toString(),
+      }),
   });
   const selected = useQuery({
     queryKey: ['employee', value],
     queryFn: () => api.employee(value!),
     enabled: value !== null,
   });
-  const people = [...(list.data?.items ?? [])];
-  if (selected.data && !people.some((person) => person.id === value)) people.unshift(selected.data);
+  const people = (list.data?.items ?? []).filter(
+    (person) => person.id !== excludeId && (!departmentId || person.department_id === departmentId),
+  );
+  if (
+    selected.data &&
+    selected.data.id !== excludeId &&
+    (!managersOnly || selected.data.is_manager) &&
+    (!departmentId || selected.data.department_id === departmentId) &&
+    !people.some((person) => person.id === value)
+  )
+    people.unshift(selected.data);
   return (
     <div className="employee-picker">
       <label>
@@ -49,7 +72,7 @@ export function EmployeePicker({
           onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
           disabled={list.isPending}
         >
-          <option value="">{list.isPending ? 'Загружаем…' : 'Не назначен'}</option>
+          <option value="">{list.isPending ? 'Загружаем…' : emptyLabel}</option>
           {people.map((person) => (
             <option key={person.id} value={person.id}>
               {fullName(person)} · {person.department.name}

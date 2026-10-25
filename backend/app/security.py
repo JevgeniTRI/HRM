@@ -6,8 +6,8 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-# 10 MiB per certificate plus room for multipart headers and the title.
-MAX_REQUEST_BODY_SIZE = 11 * 1024 * 1024
+# 15 MiB per certificate plus room for multipart headers and the title.
+MAX_REQUEST_BODY_SIZE = 16 * 1024 * 1024
 
 
 class BrowserRequestMiddleware:
@@ -55,7 +55,7 @@ class BrowserRequestMiddleware:
                 return
             if size > MAX_REQUEST_BODY_SIZE:
                 response = JSONResponse(
-                    status_code=413, content={"detail": "Размер запроса не должен превышать 11 МБ"}
+                    status_code=413, content={"detail": "Размер запроса не должен превышать 16 МБ"}
                 )
                 await response(scope, receive, send_private)
                 return

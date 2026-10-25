@@ -40,6 +40,32 @@ export function TaskTrainingFields({
       <legend>Обучение</legend>
       <div className="form-grid">
         <label>
+          Начало обучения
+          <input
+            type="date"
+            value={draft.startOn}
+            required={!!draft.endOn}
+            max={draft.endOn || undefined}
+            onChange={(event) => change({ startOn: event.target.value })}
+          />
+        </label>
+        <label>
+          Окончание обучения
+          <input
+            type="date"
+            value={draft.endOn}
+            required={!!draft.startOn}
+            min={draft.startOn || undefined}
+            onChange={(event) => change({ endOn: event.target.value })}
+          />
+        </label>
+      </div>
+      <p className="task-form-hint">
+        Укажите обе даты, чтобы обучение появилось на диаграмме в календаре. Период включает день
+        окончания; длительность в часах указывается отдельно.
+      </p>
+      <div className="form-grid">
+        <label>
           Источник обучения
           <select
             aria-label="Источник обучения в карточке"

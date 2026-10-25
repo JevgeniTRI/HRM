@@ -9,6 +9,7 @@ import type {
   EmployeePage,
   EmployeeWrite,
   Matrix,
+  OrganizationRole,
   Skill,
   SkillSummary,
 } from '../types';
@@ -75,6 +76,14 @@ export const api = {
   employees: (filters: EmployeeFilters) =>
     request<EmployeePage>(`/employees?${queryString(filters)}`),
   employee: (id: number) => request<EmployeeDetail>(`/employees/${id}`),
+  saveOrganization: (
+    id: number,
+    data: { kind: OrganizationRole; manager_id: number | null; report_ids: number[] },
+  ) =>
+    request<EmployeeDetail>(`/employees/${id}/organization`, {
+      method: 'PUT',
+      body: body(data),
+    }),
   saveEmployee: (data: EmployeeWrite, id?: number) =>
     request<EmployeeDetail>(`/employees${id ? `/${id}` : ''}`, {
       method: id ? 'PUT' : 'POST',

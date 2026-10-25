@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Pencil, Plus, ShieldCheck } from 'lucide-react';
+import { KeyRound, Pencil, Plus, Search, ShieldCheck, X } from 'lucide-react';
 import { request } from '../lib/api';
 import { roleLabels, useAuth } from '../lib/auth';
-import type { Account, Role } from '../lib/auth';
+import type { Account, AccountSummary, Role } from '../lib/auth';
 import { Empty, ErrorState, FormError, Loading, Modal, PageHeader } from '../components/ui';
 import { EmployeePicker } from '../components/EmployeePicker';
 
@@ -11,7 +11,9 @@ function AccountForm({ account, onClose }: { account?: Account; onClose: () => v
   const auth = useAuth();
   const cache = useQueryClient();
   const [username, setUsername] = useState(account?.username ?? '');
-  const [role, setRole] = useState<Role>(account?.role ?? 'employee');
+  const [role, setRole] = useState<Role>(
+    account?.role === 'manager' ? 'employee' : (account?.role ?? 'employee'),
+  );
   const [employeeId, setEmployeeId] = useState<number | null>(account?.employee_id ?? null);
   const [active, setActive] = useState(account?.is_active ?? true);
   const [password, setPassword] = useState('');
@@ -66,11 +68,13 @@ function AccountForm({ account, onClose }: { account?: Account; onClose: () => v
         <label>
           Роль
           <select value={role} disabled={own} onChange={(e) => setRole(e.target.value as Role)}>
-            {Object.entries(roleLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+            {Object.entries(roleLabels)
+              .filter(([value]) => value !== 'manager')
+              .map(([value, label]) => (
+                <option key={value} value={value}>
+                  {value === 'employee' ? 'Сотрудник / руководитель (по подчинённым)' : label}
+                </option>
+              ))}
           </select>
         </label>
         <EmployeePicker
@@ -80,7 +84,9 @@ function AccountForm({ account, onClose }: { account?: Account; onClose: () => v
           label="Карточка сотрудника"
         />
         <p className="field-hint">
-          Руководитель получает доступ к отделу выбранного сотрудника. Один аккаунт на сотрудника.
+          Статус руководителя определяется наличием подчинённых в своём отделе. Подчинённость и
+          промежуточные руководители настраиваются в карточке сотрудника. Один аккаунт на
+          сотрудника.
         </p>
         {!account && (
           <label>
@@ -192,10 +198,17 @@ function ResetPassword({ account, onClose }: { account: Account; onClose: () => 
 export function AccountsPage() {
   const accounts = useQuery({
     queryKey: ['accounts'],
-    queryFn: () => request<Account[]>('/accounts'),
+    queryFn: () => request<AccountSummary[]>('/accounts'),
   });
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState<Account | 'new' | null>(null);
   const [reset, setReset] = useState<Account | null>(null);
+  const normalize = (value: string) => value.toLocaleLowerCase('ru').replaceAll('ё', 'е');
+  const terms = normalize(search).trim().split(/\s+/).filter(Boolean);
+  const filtered = accounts.data?.filter((account) => {
+    const text = normalize(`${account.employee_name ?? ''} ${account.username}`);
+    return terms.every((term) => text.includes(term));
+  });
   return (
     <>
       <PageHeader
@@ -208,11 +221,39 @@ export function AccountsPage() {
         </button>
       </PageHeader>
       <section className="card">
-        <div className="card-heading">
+        <div className="card-heading accounts-heading">
           <h2>
             <ShieldCheck size={20} /> Пользователи системы{' '}
-            <span className="count-tag">{accounts.data?.length ?? '—'}</span>
+            <span className="count-tag" role="status" aria-live="polite" aria-atomic="true">
+              {accounts.data
+                ? terms.length
+                  ? `${filtered?.length ?? 0} из ${accounts.data.length}`
+                  : accounts.data.length
+                : '—'}
+            </span>
           </h2>
+          <div className="filter-search accounts-search">
+            <Search size={17} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label="Поиск пользователей по имени, фамилии или логину"
+              placeholder="Имя, фамилия или логин…"
+              autoComplete="off"
+              maxLength={160}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Очистить поиск пользователей"
+                onClick={() => setSearch('')}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
         {accounts.isPending ? (
           <Loading />
@@ -220,6 +261,11 @@ export function AccountsPage() {
           <ErrorState error={accounts.error} retry={() => accounts.refetch()} />
         ) : !accounts.data.length ? (
           <Empty title="Аккаунтов пока нет" description="Создайте первый аккаунт сотрудника." />
+        ) : !filtered?.length ? (
+          <Empty
+            title="Пользователи не найдены"
+            description="Попробуйте другое имя, фамилию или логин."
+          />
         ) : (
           <div className="table-scroll">
             <table>
@@ -233,7 +279,7 @@ export function AccountsPage() {
                 </tr>
               </thead>
               <tbody>
-                {accounts.data.map((account) => (
+                {filtered.map((account) => (
                   <tr key={account.id}>
                     <td>
                       <strong>{account.username}</strong>
@@ -242,7 +288,7 @@ export function AccountsPage() {
                     <td>
                       {account.employee_id ? (
                         <a href={`/employees/${account.employee_id}`}>
-                          Открыть карточку #{account.employee_id}
+                          {account.employee_name ?? `Открыть карточку #${account.employee_id}`}
                         </a>
                       ) : (
                         'Не привязан'

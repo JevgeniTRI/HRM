@@ -2,6 +2,10 @@ import { queryString, request } from '../../lib/api';
 import type { Task, TaskFilters, TaskPage, TaskStatus, TaskSummary, TaskWrite } from './types';
 
 export const taskApi = {
+  calendar: (from_on: string, to_on: string, filters: TaskFilters, page: number) =>
+    request<TaskPage>(
+      `/tasks/calendar?${queryString({ ...filters, from_on, to_on, page, page_size: 100 })}`,
+    ),
   list: (filters: TaskFilters, status: TaskStatus, page: number) =>
     request<TaskPage>(`/tasks?${queryString({ ...filters, status, page, page_size: 20 })}`),
   summary: (filters: TaskFilters) => request<TaskSummary>(`/tasks/summary?${queryString(filters)}`),

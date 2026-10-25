@@ -1,12 +1,13 @@
 """Exercise real sessions and roles through HTTP, including object-level access."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.auth import COOKIE, password_hash, token_hash, verify_password
 from app.database import get_session
-from app.models import Account, AuthSession
+from app.models import Account, AuthSession, Employee
 
 PASSWORD = "Role-test-password-2026"
 HASH = password_hash(PASSWORD)
@@ -20,6 +21,31 @@ def login(client, username, password=PASSWORD):
 
 def as_admin(client):
     login(client, "admin", "Test-admin-password-2026")
+
+
+@pytest.mark.parametrize(
+    "role,expected", [("admin", 200), ("power", 200), ("manager", 403), ("worker", 403)]
+)
+def test_only_global_roles_can_configure_skill_scales(client, team, role, expected):
+    skill = client.post("/api/skills", json={"name": "Scale test", "category": "Tech"}).json()
+    if role != "admin":
+        login(client, role)
+    response = client.put(
+        f"/api/skills/{skill['id']}",
+        json={
+            **skill,
+            "scale": {
+                "type": "letter",
+                "min": 0,
+                "max": 25,
+                "names": {"25": "Эксперт"},
+                "descriptions": {"25": "Обучает команду"},
+            },
+        },
+    )
+    assert response.status_code == expected, response.text
+    persisted = next(item for item in client.get("/api/skills").json() if item["id"] == skill["id"])
+    assert persisted["scale"]["type"] == ("letter" if expected == 200 else "numeric")
 
 
 @pytest.fixture
@@ -67,6 +93,11 @@ def team(client):
                     is_active=True,
                 )
             )
+        session.get(Employee, people["manager"]["id"]).is_manager = True
+        peer = session.get(Employee, people["peer"]["id"])
+        peer.is_manager = True
+        peer.manager_id = people["manager"]["id"]
+        session.get(Employee, people["worker"]["id"]).manager_id = peer.id
         session.commit()
     finally:
         generator.close()
@@ -78,6 +109,7 @@ def test_anonymous_access_and_csrf(client):
     for path in (
         "/api/employees",
         "/api/tasks",
+        "/api/tasks/calendar?from_on=2026-10-01&to_on=2026-10-31",
         "/api/departments",
         "/api/skills",
         "/api/dashboard",
@@ -100,6 +132,32 @@ def test_anonymous_access_and_csrf(client):
     del client.headers["X-HRM-Request"]
     assert client.post("/api/departments", json={"name": "Blocked"}).status_code == 403
     assert client.post("/api/auth/logout").status_code == 403
+
+
+@pytest.mark.parametrize(
+    "role,expected",
+    [("worker", {"worker"}), ("manager", {"worker"}), ("power", {"worker", "outsider"})],
+)
+def test_training_calendar_respects_task_visibility(client, team, role, expected):
+    for name in ("worker", "outsider"):
+        response = client.post(
+            "/api/tasks",
+            json={
+                "title": name,
+                "learning_source": "internal",
+                "learning_format": "individual",
+                "participant_count": 1,
+                "assignee_id": team[name]["id"],
+                "department_ids": [team[name]["department_id"]],
+                "start_on": "2026-10-01",
+                "end_on": "2026-10-31",
+            },
+        )
+        assert response.status_code == 201, response.text
+    login(client, role)
+    response = client.get("/api/tasks/calendar?from_on=2026-10-01&to_on=2026-10-31")
+    assert response.status_code == 200, response.text
+    assert {task["title"] for task in response.json()["items"]} == expected
 
 
 def test_session_cookie_rotation_logout_and_expiration(client):
@@ -179,6 +237,22 @@ def test_employee_lists_counts_and_departments_are_scoped(client, team, role, ex
     )
 
 
+def test_admin_account_list_includes_employee_names_without_passwords(client, team):
+    response = client.get("/api/accounts")
+    assert response.status_code == 200
+    accounts = {a["username"]: a for a in response.json()}
+    assert accounts["admin"]["employee_name"] is None
+    assert accounts["worker"]["employee_name"] == "worker Person"
+    assert all("password_hash" not in a for a in accounts.values())
+    renamed = client.put(
+        f"/api/employees/{team['worker']['id']}",
+        json={**team["worker"], "first_name": "Фёдор", "last_name": "Соколов"},
+    )
+    assert renamed.status_code == 200
+    updated = next(a for a in client.get("/api/accounts").json() if a["username"] == "worker")
+    assert updated["employee_name"] == "Фёдор Соколов"
+
+
 def test_department_managers_update_after_account_changes_and_transfers(client, team):
     departments = client.get("/api/departments").json()
     own = next(d for d in departments if d["id"] == team["manager"]["department_id"])
@@ -199,13 +273,13 @@ def test_department_managers_update_after_account_changes_and_transfers(client, 
             f"/api/employees/{team['manager']['id']}",
             json={**team["manager"], "department_id": other_id},
         ).status_code
-        == 200
+        == 409
     )
     departments = client.get("/api/departments").json()
-    assert next(d for d in departments if d["id"] == own["id"])["managers"] == []
-    assert next(d for d in departments if d["id"] == other_id)["managers"] == [
+    assert next(d for d in departments if d["id"] == own["id"])["managers"] == [
         {"id": team["manager"]["id"], "name": "manager Person"}
     ]
+    assert next(d for d in departments if d["id"] == other_id)["managers"] == []
 
 
 def test_employee_cannot_read_or_change_manager_peer_or_foreign_records(client, team):
@@ -280,7 +354,7 @@ def test_employee_can_edit_resume_but_not_employment_or_department(client, team)
     assert client.post("/api/employees", json=data).status_code == 403
 
 
-def test_manager_can_edit_peer_and_subordinates_only_in_own_department(client, team):
+def test_manager_can_edit_subordinate_managers_and_employees_only_in_own_tree(client, team):
     login(client, "manager")
     for name in ("manager", "peer", "worker"):
         data = team[name]
@@ -331,8 +405,8 @@ def test_power_user_can_manage_all_departments_and_catalogs(client, team):
     login(client, "power")
     assert (
         client.put(
-            f"/api/employees/{team['manager']['id']}",
-            json={**team["manager"], "department_id": team["departments"][1]["id"]},
+            f"/api/employees/{team['worker']['id']}",
+            json={**team["worker"], "department_id": team["departments"][1]["id"]},
         ).status_code
         == 200
     )
@@ -472,6 +546,7 @@ def test_tasks_assignment_scope_summary_and_tampering(client, team):
         ).status_code
         == 201
     )
+
     assert (
         client.put(
             f"/api/tasks/{mine['id']}",
@@ -489,10 +564,9 @@ def test_tasks_assignment_scope_summary_and_tampering(client, team):
     assert {t["title"] for t in client.get("/api/tasks").json()["items"]} == {
         "mine",
         "boss",
-        "unassigned",
         "Own",
     }
-    assert client.get("/api/tasks/summary").json()["total"] == 4
+    assert client.get("/api/tasks/summary").json()["total"] == 3
     assert (
         client.post(
             "/api/tasks",
@@ -519,3 +593,334 @@ def test_tasks_assignment_scope_summary_and_tampering(client, team):
         ).status_code
         == 201
     )
+
+
+def organization(client, person, kind="employee", manager_id=None, report_ids=None):
+    data = {"kind": kind, "manager_id": manager_id}
+    if report_ids is not None:
+        data["report_ids"] = report_ids
+    return client.put(f"/api/employees/{person['id']}/organization", json=data)
+
+
+def new_person(client, team, name="new", department=0):
+    response = client.post(
+        "/api/employees",
+        json={
+            **team["worker"],
+            "first_name": name,
+            "email": f"{name}@example.com",
+            "department_id": team["departments"][department]["id"],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+@pytest.mark.parametrize("role", ["admin", "power"])
+def test_organization_global_roles_can_assign_department_head_and_intermediate(client, team, role):
+    leaf = new_person(client, team)
+    login(client, "worker")
+    old_token = client.cookies.get(COOKIE)
+    client.cookies.clear()
+    as_admin(client)
+    if role == "power":
+        login(client, role)
+    response = organization(
+        client, team["worker"], "intermediate", team["peer"]["id"], [leaf["id"]]
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["organization_role"] == "intermediate"
+    assert response.json()["manager"]["id"] == team["peer"]["id"]
+    client.cookies.clear()
+    client.cookies.set(COOKIE, old_token)
+    assert client.get("/api/auth/me").status_code == 401
+    assert login(client, "worker").json()["role"] == "manager"
+    assert client.get("/api/employees").json()["total"] == 2
+    client.cookies.clear()
+    as_admin(client)
+    response = organization(client, team["worker"], "head")
+    assert response.status_code == 200, response.text
+    assert response.json()["organization_role"] == "head"
+    assert response.json()["manager"] is None
+    assert response.json()["is_manager"] is True
+    assert (
+        client.get(f"/api/employees/{team['peer']['id']}").json()["organization_role"] == "employee"
+    )
+
+
+def test_organization_preserves_global_account_rights(client, team):
+    admin_person = new_person(client, team, "director")
+    accounts = client.get("/api/accounts").json()
+    admin = next(a for a in accounts if a["username"] == "admin")
+    response = client.put(
+        f"/api/accounts/{admin['id']}", json={**admin, "employee_id": admin_person["id"]}
+    )
+    assert response.status_code == 200, response.text
+    as_admin(client)
+    assert (
+        organization(client, admin_person, "head", report_ids=[team["manager"]["id"]]).status_code
+        == 200
+    )
+    assert client.get("/api/auth/me").json()["role"] == "admin"
+    login(client, "power")
+    assert (
+        organization(client, team["power"], "head", report_ids=[team["outsider"]["id"]]).status_code
+        == 200
+    )
+    assert client.get("/api/auth/me").json()["role"] == "power_user"
+    assert client.get("/api/employees").json()["total"] == 6
+
+
+@pytest.mark.parametrize("role", ["worker", "manager", "peer"])
+def test_organization_cannot_be_changed_by_employee_or_manager(client, team, role):
+    login(client, role)
+    assert organization(client, team[role], "head").status_code == 403
+    assert organization(client, team["worker"], "head").status_code == 403
+    response = client.put(
+        f"/api/employees/{team[role]['id']}",
+        json={
+            **team[role],
+            "is_manager": True,
+            "manager_id": None,
+            "organization_role": "head",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["is_manager"] == (role != "worker")
+    assert (
+        response.json()["manager_id"]
+        == {"worker": team["peer"]["id"], "manager": None, "peer": team["manager"]["id"]}[role]
+    )
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "self",
+        "cycle",
+        "foreign",
+        "missing",
+        "orphan",
+        "head_parent",
+        "self_report",
+        "foreign_report",
+    ],
+)
+def test_organization_rejects_invalid_reporting_lines(client, team, invalid):
+    person, kind, parent, reports = {
+        "self": ("manager", "intermediate", team["manager"]["id"], None),
+        "cycle": ("manager", "intermediate", team["worker"]["id"], None),
+        "foreign": ("worker", "employee", team["outsider"]["id"], None),
+        "missing": ("worker", "employee", 999999, None),
+        "orphan": ("worker", "employee", None, None),
+        "head_parent": ("manager", "head", team["outsider"]["id"], None),
+        "self_report": ("worker", "intermediate", team["peer"]["id"], [team["worker"]["id"]]),
+        "foreign_report": ("worker", "intermediate", team["peer"]["id"], [team["outsider"]["id"]]),
+    }[invalid]
+    response = organization(client, team[person], kind, parent, reports)
+    assert response.status_code == 422, response.text
+    unchanged = client.get(f"/api/employees/{team[person]['id']}").json()
+    assert unchanged["manager_id"] == (team["peer"]["id"] if person == "worker" else None)
+
+
+def test_organization_first_report_promotes_and_last_report_automatically_demotes(client, team):
+    leaf = new_person(client, team)
+    assert organization(client, leaf, "head").json()["organization_role"] == "employee"
+    login(client, "peer")
+    old_token = client.cookies.get(COOKIE)
+    client.cookies.clear()
+    as_admin(client)
+    response = organization(client, team["worker"], "employee", leaf["id"])
+    assert response.status_code == 200, response.text
+    promoted = client.get(f"/api/employees/{leaf['id']}").json()
+    assert promoted["organization_role"] == "head" and promoted["is_manager"]
+    demoted = client.get(f"/api/employees/{team['peer']['id']}").json()
+    assert demoted["organization_role"] == "employee" and not demoted["is_manager"]
+    client.cookies.clear()
+    client.cookies.set(COOKIE, old_token)
+    assert client.get("/api/auth/me").status_code == 401
+    assert login(client, "peer").json()["role"] == "employee"
+    assert client.get("/api/dashboard").status_code == 403
+    as_admin(client)
+    assert (
+        organization(client, team["worker"], "employee", team["manager"]["id"]).status_code == 200
+    )
+    assert not client.get(f"/api/employees/{leaf['id']}").json()["is_manager"]
+
+
+def test_organization_protects_reports_from_accidental_removal_and_head_deletion(client, team):
+    assert organization(client, team["peer"], "employee", team["manager"]["id"]).status_code == 409
+    assert organization(client, team["manager"], "head", report_ids=[]).status_code == 409
+    assert client.delete(f"/api/employees/{team['peer']['id']}").status_code == 409
+    assert (
+        client.put(
+            f"/api/employees/{team['peer']['id']}",
+            json={
+                **team["peer"],
+                "department_id": team["departments"][1]["id"],
+            },
+        ).status_code
+        == 409
+    )
+
+
+def test_organization_department_boundaries_cover_lists_profiles_counts_exports_and_files(
+    client, team
+):
+    # Defend against a legacy path that leaves and re-enters a department.
+    other = new_person(client, team, "same_department_outside_branch")
+    generator = client.app.dependency_overrides[get_session]()
+    session = next(generator)
+    try:
+        session.get(Employee, team["outsider"]["id"]).manager_id = team["manager"]["id"]
+        session.get(Employee, other["id"]).manager_id = team["outsider"]["id"]
+        session.commit()
+    finally:
+        generator.close()
+    skill = client.post("/api/skills", json={"name": "Hierarchy", "category": "Tech"}).json()
+    certificates = {}
+    for name in ("worker", "outsider"):
+        path = f"/api/employees/{team[name]['id']}/skills/{skill['id']}"
+        assert client.put(path, json={"current_level": 2, "target_level": 4}).status_code == 200
+        response = client.post(path + "/certificates", files={"file": ("test.pdf", b"%PDF-1.4\n")})
+        assert response.status_code == 201, response.text
+        certificates[name] = path + f"/certificates/{response.json()['id']}/file"
+    login(client, "manager")
+    visible = {team[n]["id"] for n in ("manager", "peer", "worker")}
+    assert {p["id"] for p in client.get("/api/employees").json()["items"]} == visible
+    assert (
+        client.get(f"/api/employees?department_id={team['outsider']['department_id']}").json()[
+            "total"
+        ]
+        == 0
+    )
+    assert client.get("/api/matrix").json()["total"] == 3
+    assert client.get("/api/dashboard").json()["stats"]["employees"] == 3
+    assert client.get("/api/skills").json()[0]["employee_count"] == 1
+    assert len(client.get("/api/departments").json()) == 1
+    assert client.get(f"/api/employees/{team['outsider']['id']}").status_code == 404
+    assert client.get(f"/api/employees/{other['id']}").status_code == 404
+    detail = client.get(f"/api/employees/{team['manager']['id']}").json()
+    assert [p["id"] for p in detail["direct_reports"]] == [team["peer"]["id"]]
+    assert client.get(certificates["worker"]).status_code == 200
+    assert client.get(certificates["outsider"]).status_code == 404
+    exported = client.get("/api/employees/export").text
+    assert "worker@example.com" in exported and "outsider@example.com" not in exported
+    assert "same_department_outside_branch" not in exported
+    login(client, "peer")
+    assert client.get("/api/employees").json()["total"] == 2
+    assert client.get(f"/api/employees/{team['manager']['id']}").status_code == 404
+    detail = client.get(f"/api/employees/{team['peer']['id']}").json()
+    assert detail["organization_role"] == "intermediate"
+    assert "email" not in detail["manager"] and "skills" not in detail["manager"]
+
+
+def test_organization_reassignment_changes_existing_ancestor_access_immediately(client, team):
+    # Keep one other direct report so the old head stays a manager and retains its session.
+    spare = new_person(client, team, "spare")
+    destination = new_person(client, team, "destination")
+    assert organization(client, spare, manager_id=team["manager"]["id"]).status_code == 200
+    login(client, "manager")
+    token = client.cookies.get(COOKIE)
+    client.cookies.clear()
+    as_admin(client)
+    assert organization(client, team["peer"], "intermediate", destination["id"]).status_code == 200
+    client.cookies.clear()
+    client.cookies.set(COOKIE, token)
+    assert client.get("/api/auth/me").status_code == 200
+    assert client.get("/api/employees").json()["total"] == 2
+    assert client.get(f"/api/employees/{team['worker']['id']}").status_code == 404
+    assert client.get(f"/api/employees/{team['peer']['id']}").status_code == 404
+
+
+def test_organization_task_access_stays_inside_department_and_reporting_tree(client, team):
+    login(client, "manager")
+    response = client.post(
+        "/api/tasks",
+        json={
+            "title": "Nested report training",
+            "assignee_id": team["worker"]["id"],
+            "department_ids": [team["manager"]["department_id"]],
+            "learning_source": "internal",
+            "learning_format": "individual",
+            "participant_count": 1,
+            "start_on": "2026-10-01",
+            "end_on": "2026-10-31",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert client.post("/api/tasks", json={"title": "Unassigned"}).status_code == 422
+    assert (
+        client.post(
+            "/api/tasks", json={"title": "Foreign", "assignee_id": team["outsider"]["id"]}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/tasks",
+            json={
+                "title": "Foreign department",
+                "assignee_id": team["worker"]["id"],
+                "department_ids": [team["outsider"]["department_id"]],
+            },
+        ).status_code
+        == 403
+    )
+    assert client.get("/api/tasks/summary").json()["total"] == 1
+    assert (
+        client.get("/api/tasks/calendar?from_on=2026-10-01&to_on=2026-10-31").json()["total"] == 1
+    )
+
+
+def test_organization_concurrent_parent_changes_cannot_create_a_cycle(client, team):
+    other = new_person(client, team)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = [
+            pool.submit(organization, client, team["manager"], "intermediate", other["id"]),
+            pool.submit(organization, client, other, "intermediate", team["manager"]["id"]),
+        ]
+        assert sorted(result.result().status_code for result in results) == [200, 422]
+
+
+def test_organization_account_role_is_derived_even_when_admin_requests_manager(client, team):
+    account = next(a for a in client.get("/api/accounts").json() if a["username"] == "outsider")
+    response = client.put(f"/api/accounts/{account['id']}", json={**account, "role": "manager"})
+    assert response.status_code == 200, response.text
+    assert response.json()["role"] == "employee"
+    account = next(a for a in client.get("/api/accounts").json() if a["username"] == "peer")
+    response = client.put(f"/api/accounts/{account['id']}", json={**account, "role": "employee"})
+    assert response.status_code == 200, response.text
+    assert response.json()["role"] == "manager"
+
+
+def test_organization_department_transfer_detaches_parent_and_demotes_last_supervisor(client, team):
+    response = client.put(
+        f"/api/employees/{team['worker']['id']}",
+        json={
+            **team["worker"],
+            "department_id": team["outsider"]["department_id"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["manager_id"] is None
+    assert response.json()["organization_role"] == "employee"
+    assert not client.get(f"/api/employees/{team['peer']['id']}").json()["is_manager"]
+    login(client, "manager")
+    assert client.get(f"/api/employees/{team['worker']['id']}").status_code == 404
+
+
+def test_organization_deleting_last_report_restores_employee_status(client, team):
+    leaf = new_person(client, team)
+    response = organization(client, leaf, manager_id=team["worker"]["id"])
+    assert response.status_code == 200, response.text
+    assert (
+        client.get(f"/api/employees/{team['worker']['id']}").json()["organization_role"]
+        == "intermediate"
+    )
+    assert client.delete(f"/api/employees/{leaf['id']}").status_code == 204
+    assert (
+        client.get(f"/api/employees/{team['worker']['id']}").json()["organization_role"]
+        == "employee"
+    )
+    assert login(client, "worker").json()["role"] == "employee"

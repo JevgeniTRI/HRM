@@ -3,7 +3,14 @@ import type { FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Assessment, Skill } from '../types';
 import { api } from '../lib/api';
-import { levelLabels } from '../lib/format';
+import {
+  defaultScale,
+  levelLabel,
+  levelName,
+  levelOption,
+  scaleLabel,
+  scaleLevels,
+} from '../lib/skillScales';
 import { useRefreshData, useSkills } from '../lib/queries';
 import { ErrorState, FormError, Loading, Modal } from './ui';
 import { CertificateList, CertificateUpload } from './Certificates';
@@ -26,6 +33,11 @@ export function AssessmentForm({
   const [skillId, setSkillId] = useState(String(assessment?.skill.id ?? fixedSkill?.id ?? ''));
   const [current, setCurrent] = useState(assessment?.current_level?.toString() ?? '');
   const [target, setTarget] = useState(String(assessment?.target_level ?? 3));
+  const selectedSkill =
+    skills.data?.find((item) => item.id === Number(skillId)) ?? assessment?.skill ?? fixedSkill;
+  const scale = selectedSkill?.scale ?? defaultScale;
+  const levels = scaleLevels(scale);
+  const targetValue = Math.max(scale.min, Math.min(scale.max, Number(target)));
   const [uploadPending, setUploadPending] = useState(false);
   const employee = useQuery({
     queryKey: ['employee', employeeId],
@@ -38,12 +50,7 @@ export function AssessmentForm({
     [];
   const save = useMutation({
     mutationFn: () =>
-      api.assess(
-        employeeId,
-        Number(skillId),
-        current === '' ? null : Number(current),
-        Number(target),
-      ),
+      api.assess(employeeId, Number(skillId), current === '' ? null : Number(current), targetValue),
     onSuccess: async () => {
       await refresh();
       onClose();
@@ -85,7 +92,11 @@ export function AssessmentForm({
                 autoFocus
                 required
                 value={skillId}
-                onChange={(event) => setSkillId(event.target.value)}
+                onChange={(event) => {
+                  setSkillId(event.target.value);
+                  setCurrent('');
+                  setTarget('3');
+                }}
               >
                 <option value="">Выберите навык</option>
                 {available?.map((skill) => (
@@ -102,30 +113,60 @@ export function AssessmentForm({
           <div className="form-grid">
             <label>
               Текущий уровень
-              <select value={current} onChange={(event) => setCurrent(event.target.value)}>
+              <select
+                value={current}
+                disabled={!skillId}
+                onChange={(event) => setCurrent(event.target.value)}
+              >
                 <option value="">Не оценён</option>
-                {levelLabels.map((label, index) => (
-                  <option key={index} value={index}>
-                    {index} — {label}
+                {levels.map((level) => (
+                  <option key={level} value={level}>
+                    {levelOption(scale, level)}
                   </option>
                 ))}
               </select>
             </label>
             <label>
               Целевой уровень
-              <select value={target} onChange={(event) => setTarget(event.target.value)}>
-                {levelLabels.slice(1).map((label, index) => (
-                  <option key={index + 1} value={index + 1}>
-                    {index + 1} — {label}
+              <select
+                value={targetValue}
+                disabled={!skillId}
+                onChange={(event) => setTarget(event.target.value)}
+              >
+                {levels.map((level) => (
+                  <option key={level} value={level}>
+                    {levelOption(scale, level)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
-          <div className="level-guide">
-            Уровень 0 — нет опыта; 1–2 — начальный и базовый; 3 — уверенный; 4 — продвинутый; 5 —
-            эксперт. «Не оценён» означает, что оценка ещё не проведена.
-          </div>
+          {selectedSkill && (
+            <div className="level-guide">
+              <p>
+                Шкала {scaleLabel(scale)}.{' '}
+                {scale.type === 'letter' && 'Уровни возрастают от A к Z. '}«Не оценён» означает, что
+                оценка ещё не проведена.
+              </p>
+              <details className="assessment-scale-guide">
+                <summary>Описания уровней</summary>
+                <dl>
+                  {levels.map((level) => (
+                    <div key={level}>
+                      <dt>{levelLabel(scale, level)}</dt>
+                      <dd>
+                        <strong>{levelName(scale, level)}</strong>
+                        <p>
+                          {scale.descriptions[String(level)] ||
+                            'Требования к этому уровню пока не описаны.'}
+                        </p>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            </div>
+          )}
           <FormError error={save.error ?? remove.error} />
           {assessment && (
             <div className="assessment-certificates">

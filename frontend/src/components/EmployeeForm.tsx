@@ -132,6 +132,12 @@ export function EmployeeForm({
               ))}
             </select>
           </label>
+          {employee && globalAccess && (
+            <p className="field-hint">
+              При смене отдела текущий руководитель будет снят. Перед переводом руководителя сначала
+              переназначьте его подчинённых.
+            </p>
+          )}
           {!departments.data?.length && (
             <p className="field-hint">Сначала создайте подразделение в соответствующем разделе.</p>
           )}

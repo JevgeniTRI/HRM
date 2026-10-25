@@ -16,7 +16,8 @@ import type { Assessment } from '../types';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { assessmentLabels, assessmentState } from '../lib/assessments';
-import { dateLabel, fullName, levelLabels, timestamp } from '../lib/format';
+import { dateLabel, fullName, timestamp } from '../lib/format';
+import { levelOption } from '../lib/skillScales';
 import { useRefreshData } from '../lib/queries';
 import {
   Avatar,
@@ -31,6 +32,8 @@ import {
 import { EmployeeForm } from '../components/EmployeeForm';
 import { AssessmentForm } from '../components/AssessmentForm';
 import { CertificateForm, CertificateList } from '../components/Certificates';
+import { SkillLevelsDialog } from '../components/SkillLevelsDialog';
+import { OrganizationSection } from '../components/OrganizationSection';
 
 export function EmployeeDetailPage() {
   const { user, globalAccess } = useAuth();
@@ -38,6 +41,7 @@ export function EmployeeDetailPage() {
   const employee = useQuery({ queryKey: ['employee', id], queryFn: () => api.employee(id) });
   const [edit, setEdit] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | 'new' | null>(null);
+  const [levelGuide, setLevelGuide] = useState<Assessment | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [certificateSkillId, setCertificateSkillId] = useState<number | 'new' | null>(null);
   const refresh = useRefreshData();
@@ -62,7 +66,7 @@ export function EmployeeDetailPage() {
       {user?.role !== 'employee' && (
         <Link to="/employees" className="back-link">
           <ArrowLeft size={16} />
-          {globalAccess ? 'Все сотрудники' : 'Мой отдел'}
+          {globalAccess ? 'Все сотрудники' : 'Моя команда'}
         </Link>
       )}
       <PageHeader title={fullName(person)} description={person.position}>
@@ -103,6 +107,7 @@ export function EmployeeDetailPage() {
           </div>
         </div>
       </section>
+      <OrganizationSection employee={person} />
       <section className="card resume-card">
         <div className="card-heading">
           <div>
@@ -166,15 +171,29 @@ export function EmployeeDetailPage() {
                       {item.current_level === null ? (
                         <span className="muted">Не оценён</span>
                       ) : (
-                        <strong>
-                          {item.current_level} — {levelLabels[item.current_level]}
-                        </strong>
+                        <button
+                          type="button"
+                          className="level-description-button assessment-level-text"
+                          aria-label={`Текущий уровень ${item.skill.name}: ${levelOption(item.skill.scale, item.current_level)}`}
+                          title="Посмотреть описания всех уровней компетенции"
+                          onClick={() => setLevelGuide(item)}
+                        >
+                          {levelOption(item.skill.scale, item.current_level)}
+                        </button>
                       )}
                     </td>
                     <td>
                       <span className="target-label">
                         <Target size={15} />
-                        {item.target_level} — {levelLabels[item.target_level]}
+                        <button
+                          type="button"
+                          className="level-description-button assessment-level-text"
+                          aria-label={`Целевой уровень ${item.skill.name}: ${levelOption(item.skill.scale, item.target_level)}`}
+                          title="Посмотреть описания всех уровней компетенции"
+                          onClick={() => setLevelGuide(item)}
+                        >
+                          {levelOption(item.skill.scale, item.target_level)}
+                        </button>
                       </span>
                     </td>
                     <td>
@@ -214,7 +233,7 @@ export function EmployeeDetailPage() {
           </div>
         )}
         <div className="overview-bottom">
-          <span>Шкала 0–5 · Неоценённые навыки не входят в средний уровень</span>
+          <span>У каждого навыка своя шкала · Неоценённые навыки не входят в средний уровень</span>
           {user?.role !== 'employee' && <Link to="/matrix">Матрица команды</Link>}
         </div>
       </section>
@@ -275,6 +294,14 @@ export function EmployeeDetailPage() {
           assessment={assessment === 'new' ? undefined : assessment}
           assignedIds={person.skills.map((item) => item.skill.id)}
           onClose={() => setAssessment(null)}
+        />
+      )}
+      {levelGuide && (
+        <SkillLevelsDialog
+          assessment={
+            person.skills.find((item) => item.skill.id === levelGuide.skill.id) ?? levelGuide
+          }
+          onClose={() => setLevelGuide(null)}
         />
       )}
       {confirmDelete && (

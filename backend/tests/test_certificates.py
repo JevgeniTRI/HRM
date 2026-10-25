@@ -88,7 +88,7 @@ def test_parent_deletion_removes_records_and_files(
         ("certificate.png", PDF, 422),
         ("certificate.html", b"<html></html>", 422),
         ("certificate.exe", b"MZ", 422),
-        ("certificate.pdf", b"%PDF-" + b"x" * (10 * 1024 * 1024), 413),
+        ("certificate.pdf", b"%PDF-" + b"x" * (15 * 1024 * 1024 - 4), 413),
     ],
     ids=["empty", "fake-pdf", "wrong-format", "html", "executable", "oversized"],
 )
@@ -97,6 +97,17 @@ def test_invalid_uploads_leave_no_records_or_files(client, certificate_path, nam
     assert response.status_code == status, response.text
     assert client.get(certificate_path).json() == []
     assert stored_files() == []
+
+
+@pytest.mark.parametrize("size", [10 * 1024 * 1024 + 1, 15 * 1024 * 1024])
+def test_large_certificate_upload_and_download(client, certificate_path, size):
+    content = PDF + b" " * (size - len(PDF))
+    response = client.post(certificate_path, files={"file": ("large.pdf", content)})
+    assert response.status_code == 201, response.text
+    certificate = response.json()
+    assert certificate["size"] == size
+    assert stored_files()[0].stat().st_size == size
+    assert client.get(f"{certificate_path}/{certificate['id']}/file").content == content
 
 
 @pytest.mark.parametrize(

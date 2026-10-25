@@ -3,7 +3,9 @@ import { BookOpen, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
 import type { Skill } from '../types';
 import { api } from '../lib/api';
 import { useSkills } from '../lib/queries';
-import { CatalogForm, DeleteDialog } from '../components/CatalogForm';
+import { DeleteDialog } from '../components/CatalogForm';
+import { SkillForm } from '../components/SkillForm';
+import { scaleLabel } from '../lib/skillScales';
 import { Empty, ErrorState, Loading, PageHeader } from '../components/ui';
 
 export function SkillsPage() {
@@ -98,7 +100,7 @@ export function SkillsPage() {
                   <Users size={15} />
                   {skill.employee_count} сотрудников
                 </span>
-                <span>Шкала 0–5</span>
+                <span>Шкала {scaleLabel(skill.scale)}</span>
               </div>
             </article>
           ))}
@@ -107,18 +109,13 @@ export function SkillsPage() {
       <div className="info-note">
         <BookOpen size={18} />
         <p>
-          <strong>Одна шкала для всей команды.</strong> Оценивайте навыки от 0 (нет опыта) до 5
-          (эксперт). Целевой уровень задаётся индивидуально в карточке сотрудника.
+          Для каждого навыка можно настроить числовую шкалу в пределах 0–10 или буквенную A–Z и
+          описать каждый уровень. Настройка доступна администратору и power_user. Целевой уровень
+          задаётся индивидуально в карточке сотрудника.
         </p>
       </div>
       {edit && (
-        <CatalogForm
-          title={edit === 'new' ? 'Новый навык' : 'Редактировать навык'}
-          initial={edit === 'new' ? undefined : edit}
-          withCategory
-          onSave={(data) => api.saveSkill(data, edit === 'new' ? undefined : edit.id)}
-          onClose={() => setEdit(null)}
-        />
+        <SkillForm skill={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />
       )}
       {remove && (
         <DeleteDialog

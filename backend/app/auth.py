@@ -20,6 +20,7 @@ from app.dependencies import DB
 from app.models import Account, AuthSession, Employee
 from app.permissions import Principal, employee_scope, task_scope
 from app.services.common import record_activity
+from app.services.organization import sync_account_manager
 from app.tasks.models import Task
 
 COOKIE = "hrm_session"
@@ -111,6 +112,10 @@ class AccountRead(BaseModel):
     role: Role
     employee_id: int | None
     is_active: bool
+
+
+class AccountListRead(AccountRead):
+    employee_name: str | None
 
 
 def identity(account: Account):
@@ -257,16 +262,29 @@ def commit_account(session):
         raise HTTPException(409, "Логин или сотрудник уже связан с другим аккаунтом") from exc
 
 
-@accounts_router.get("", response_model=list[AccountRead])
+@accounts_router.get("", response_model=list[AccountListRead])
 def list_accounts(_: AdminAccount, session: DB):
-    return session.scalars(select(Account).order_by(Account.username)).all()
+    rows = session.execute(
+        select(Account, Employee.first_name, Employee.last_name)
+        .outerjoin(Employee, Account.employee_id == Employee.id)
+        .order_by(Account.username)
+    ).all()
+    return [
+        AccountListRead(
+            **AccountRead.model_validate(account).model_dump(),
+            employee_name=f"{first} {last}" if first is not None else None,
+        )
+        for account, first, last in rows
+    ]
 
 
 @accounts_router.post("", response_model=AccountRead, status_code=201)
 def create_account(data: AccountCreate, _: AdminAccount, session: DB):
     validate_link(data, session)
+    role = sync_account_manager(session, data.employee_id, data.role)
     account = Account(
-        **data.model_dump(exclude={"password", "username"}),
+        **data.model_dump(exclude={"password", "username", "role"}),
+        role=role,
         username=data.username.casefold(),
         password_hash=password_hash(data.password),
     )
@@ -303,8 +321,13 @@ def update_account(account_id: int, data: AccountWrite, actor: AdminAccount, ses
         )
         if admins <= 1:
             raise HTTPException(409, "В системе должен остаться активный администратор")
+    role = sync_account_manager(session, data.employee_id, data.role)
     for key, value in data.model_dump().items():
-        setattr(account, key, value.casefold() if key == "username" else value)
+        setattr(
+            account,
+            key,
+            role if key == "role" else value.casefold() if key == "username" else value,
+        )
     session.execute(delete(AuthSession).where(AuthSession.account_id == account.id))
     record_activity(session, "account", "Обновлён доступ", f"{account.username} · {account.role}")
     commit_account(session)
@@ -348,11 +371,15 @@ def authorize(request: Request, account: CurrentAccount, session: DB):
         return
     if path in {"/employees", "/departments", "/skills"} and method == "GET":
         return
+    if method == "GET" and (path == "/teams" or re.fullmatch(r"/teams/\d+(?:/members)?", path)):
+        return
     if (
         path in {"/matrix", "/dashboard", "/employees/export"}
         and method == "GET"
         and actor.role == "manager"
     ):
+        return
+    if path == "/tasks/calendar" and method == "GET":
         return
     if path in {"/tasks", "/tasks/summary", "/tasks/estimate"}:
         return

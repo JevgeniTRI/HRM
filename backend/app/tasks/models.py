@@ -46,6 +46,12 @@ class Task(Base):
             name="ck_tasks_cost",
         ),
         CheckConstraint("version >= 1", name="ck_tasks_version"),
+        CheckConstraint(
+            "(start_on IS NULL AND end_on IS NULL) OR "
+            "(learning_source IS NOT NULL AND start_on IS NOT NULL "
+            "AND end_on IS NOT NULL AND end_on >= start_on)",
+            name="ck_tasks_training_dates",
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     assignee_id: Mapped[int | None] = mapped_column(
@@ -63,6 +69,8 @@ class Task(Base):
     cost_minor: Mapped[int | None] = mapped_column(BigInteger)
     currency: Mapped[str | None] = mapped_column(String(3))
     due_on: Mapped[date | None]
+    start_on: Mapped[date | None]
+    end_on: Mapped[date | None]
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now)
     version: Mapped[int] = mapped_column(default=1)

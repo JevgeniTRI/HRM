@@ -1,6 +1,15 @@
 from enum import StrEnum
 
 
+def default_level_names() -> dict[str, str]:
+    labels = ("Нет опыта", "Начальный", "Базовый", "Уверенный", "Продвинутый", "Эксперт")
+    return {str(index): label for index, label in enumerate(labels)}
+
+
+def level_label(level: int, scale_type: str) -> str:
+    return chr(65 + level) if scale_type == "letter" else str(level)
+
+
 class AssessmentState(StrEnum):
     UNASSESSED = "unassessed"
     MET = "met"

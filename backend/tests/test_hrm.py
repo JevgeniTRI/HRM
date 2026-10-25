@@ -131,7 +131,7 @@ def test_assessment_upsert_keeps_single_assignment_and_distinguishes_null(client
     assert client.get("/api/dashboard").json()["stats"]["coverage"] == 100
 
 
-@pytest.mark.parametrize("current,target", [(6, 3), (-1, 3), (2, 0), (2, 6), (2.5, 3)])
+@pytest.mark.parametrize("current,target", [(6, 3), (-1, 3), (2, -1), (2, 6), (2.5, 3)])
 def test_assessment_validates_level_range(client, employee, skill, current, target):
     assert (
         client.put(

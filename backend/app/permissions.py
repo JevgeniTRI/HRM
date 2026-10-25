@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass
 
-from sqlalchemy import and_, false, or_, select, true
+from sqlalchemy import false, select, true
 
 from app.models import Employee
-from app.tasks.models import Task, task_departments
+from app.tasks.models import Task
 
 
 @dataclass(frozen=True)
@@ -25,8 +25,23 @@ def employee_scope(session):
     if actor is None or actor.global_access:
         return true()
     if actor.role == "manager":
-        return Employee.department_id == actor.department_id
+        return Employee.id.in_(reporting_tree_ids(actor.employee_id, actor.department_id))
     return Employee.id == actor.employee_id
+
+
+def reporting_tree_ids(employee_id, department_id):
+    # UNION also terminates safely if invalid legacy data ever contains a cycle.
+    tree = (
+        select(Employee.id)
+        .where(Employee.id == employee_id, Employee.department_id == department_id)
+        .cte(recursive=True)
+    )
+    tree = tree.union(
+        select(Employee.id)
+        .join(tree, Employee.manager_id == tree.c.id)
+        .where(Employee.department_id == department_id)
+    )
+    return select(tree.c.id)
 
 
 def visible_employee_ids(session):
@@ -37,6 +52,8 @@ def department_scope(session, column):
     actor = session.info.get("actor")
     if actor is None or actor.global_access:
         return true()
+    if actor.role == "manager":
+        return column.in_(select(Employee.department_id).where(employee_scope(session)))
     return column == actor.department_id if actor.department_id is not None else false()
 
 
@@ -44,19 +61,4 @@ def task_scope(session):
     actor = session.info.get("actor")
     if actor is None or actor.global_access:
         return true()
-    if actor.role == "employee":
-        return Task.assignee_id == actor.employee_id
-    # Shared tasks spanning other departments remain under global management.
-    own_department = select(task_departments.c.task_id).where(
-        task_departments.c.department_id == actor.department_id
-    )
-    other_departments = select(task_departments.c.task_id).where(
-        task_departments.c.department_id != actor.department_id
-    )
-    return and_(
-        ~Task.id.in_(other_departments),
-        or_(
-            Task.assignee_id.in_(visible_employee_ids(session)),
-            and_(Task.assignee_id.is_(None), Task.id.in_(own_department)),
-        ),
-    )
+    return Task.assignee_id.in_(visible_employee_ids(session))

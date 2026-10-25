@@ -24,6 +24,8 @@ function initialDraft(task: Task | undefined, status: TaskStatus): TaskDraft {
     cost: task?.cost ?? '',
     currency: task?.currency ?? 'EUR',
     dueOn: task?.due_on ?? '',
+    startOn: task?.start_on ?? '',
+    endOn: task?.end_on ?? '',
     departmentIds: task?.departments.map((dept) => dept.id) ?? [],
   };
 }
@@ -41,6 +43,8 @@ function writeValues(draft: TaskDraft): TaskWrite {
     cost: draft.cost !== '' ? draft.cost : null,
     currency: draft.cost !== '' ? draft.currency : null,
     due_on: draft.dueOn || null,
+    start_on: draft.isTraining ? draft.startOn || null : null,
+    end_on: draft.isTraining ? draft.endOn || null : null,
     department_ids: draft.departmentIds,
   };
 }
@@ -48,10 +52,12 @@ function writeValues(draft: TaskDraft): TaskWrite {
 export function TaskForm({
   task,
   status = 'todo',
+  trainingOnly = false,
   onClose,
 }: {
   task?: Task;
   status?: TaskStatus;
+  trainingOnly?: boolean;
   onClose: () => void;
 }) {
   const { user } = useAuth();
@@ -88,7 +94,15 @@ export function TaskForm({
   }
   return (
     <Modal
-      title={task ? 'Редактировать задачу' : 'Новая задача'}
+      title={
+        trainingOnly
+          ? task
+            ? 'Редактировать обучение'
+            : 'Новое обучение'
+          : task
+            ? 'Редактировать задачу'
+            : 'Новая задача'
+      }
       subtitle="Планируйте работу и обучение, учитывайте стоимость и время команды."
       onClose={() => {
         if (!save.isPending) onClose();
@@ -145,20 +159,27 @@ export function TaskForm({
               />
             </label>
           </div>
-          <label className="task-training-toggle">
-            <input
-              type="checkbox"
-              checked={draft.isTraining}
-              onChange={(event) => change({ isTraining: event.target.checked })}
-            />
-            <span>
-              <strong>Это обучение</strong>
-              <small>Добавить источник, формат, участников и человекочасы</small>
-            </span>
-          </label>
+          {!trainingOnly && (
+            <label className="task-training-toggle">
+              <input
+                type="checkbox"
+                checked={draft.isTraining}
+                onChange={(event) => change({ isTraining: event.target.checked })}
+              />
+              <span>
+                <strong>Это обучение</strong>
+                <small>Добавить источник, формат, участников и человекочасы</small>
+              </span>
+            </label>
+          )}
           {draft.isTraining && <TaskTrainingFields draft={draft} change={change} />}
           {user?.role !== 'employee' && (
-            <EmployeePicker value={assignee} onChange={setAssignee} label="Исполнитель" />
+            <EmployeePicker
+              value={assignee}
+              onChange={setAssignee}
+              label="Исполнитель"
+              required={user?.role === 'manager'}
+            />
           )}
           <fieldset className="task-form-section" disabled={user?.role === 'employee' && !!task}>
             <legend>Задействованные подразделения</legend>
@@ -194,7 +215,7 @@ export function TaskForm({
             )}
             <p className="task-form-hint">
               {user?.role === 'manager'
-                ? 'Назначьте задачу сотруднику своего отдела или всему отделу.'
+                ? 'Выберите исполнителя из своей ветки подчинения в вашем отделе.'
                 : 'Выберите подразделения, которые участвуют в задаче.'}
             </p>
           </fieldset>
@@ -214,7 +235,15 @@ export function TaskForm({
             className="button primary"
             disabled={save.isPending || departments.isPending || departments.isError}
           >
-            {save.isPending ? 'Сохраняем…' : task ? 'Сохранить задачу' : 'Создать задачу'}
+            {save.isPending
+              ? 'Сохраняем…'
+              : trainingOnly
+                ? task
+                  ? 'Сохранить обучение'
+                  : 'Создать обучение'
+                : task
+                  ? 'Сохранить задачу'
+                  : 'Создать задачу'}
           </button>
         </div>
       </form>

@@ -88,10 +88,13 @@ test('filters work together, persist in URL and update summary', async ({ page, 
   await page
     .getByRole('combobox', { name: 'Источник обучения', exact: true })
     .selectOption('internal');
+  await expect(page).toHaveURL(/learning_source=internal/);
   await page.getByRole('combobox', { name: 'Формат обучения', exact: true }).selectOption('group');
+  await expect(page).toHaveURL(/learning_format=group/);
   await page
     .getByRole('combobox', { name: 'Подразделение задачи' })
     .selectOption(String(design.id));
+  await expect(page).toHaveURL(new RegExp(`department_id=${design.id}(?:&|$)`));
   await expect(page.getByRole('article')).toHaveCount(1);
   await expect(page.locator('.task-metrics .metric-value').first()).toHaveText('1');
   await expect(page.locator('.task-metrics .metric-value').nth(2)).toContainText('15');

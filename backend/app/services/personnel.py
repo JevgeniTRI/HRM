@@ -6,10 +6,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ConflictError
-from app.models import Department, Employee, EmployeeSkill
+from app.models import Department, Employee, EmployeeSkill, Team
 from app.permissions import employee_scope
 from app.schemas import EmployeeStatus, EmployeeWrite
 from app.services.common import commit, escaped_search, record_activity, require_record
+from app.services.organization import (
+    apply_reporting_changes,
+    lock_employee,
+    reconcile_managers,
+    require_no_reports,
+)
 from app.storage import remove_files
 
 
@@ -43,11 +49,20 @@ def employee_values(data: EmployeeWrite) -> dict:
 
 
 def get_employee_detail(session: Session, employee_id: int) -> Employee:
+    actor = session.info.get("actor")
+    manager = Employee.manager
+    reports = Employee.direct_reports
+    if actor is not None and not actor.global_access:
+        manager = manager.and_(Employee.department_id == actor.department_id)
+        reports = reports.and_(Employee.department_id == actor.department_id)
     employee = session.scalar(
         select(Employee)
         .where(Employee.id == employee_id)
         .options(
             selectinload(Employee.department),
+            selectinload(Employee.team),
+            selectinload(manager).selectinload(Employee.department),
+            selectinload(reports).selectinload(Employee.department),
             selectinload(Employee.skills).selectinload(EmployeeSkill.skill),
             selectinload(Employee.skills).selectinload(EmployeeSkill.certificates),
         )
@@ -65,8 +80,11 @@ def list_employees(
     status: EmployeeStatus | None = None,
     page: int = 1,
     page_size: int = 10,
+    is_manager: bool | None = None,
 ):
     query = employee_query(q, department_id, status).where(employee_scope(session))
+    if is_manager is not None:
+        query = query.where(Employee.is_manager.is_(is_manager))
     total = session.scalar(select(func.count()).select_from(query.subquery())) or 0
     items = session.scalars(
         query.options(selectinload(Employee.department))
@@ -143,8 +161,12 @@ def create_employee(data: EmployeeWrite, session: Session):
 
 
 def update_employee(employee_id: int, data: EmployeeWrite, session: Session):
-    employee = require_record(session, Employee, employee_id)
+    employee = lock_employee(session, employee_id)
     require_record(session, Department, data.department_id)
+    if employee.department_id != data.department_id:
+        require_no_reports(session, employee_id)
+        require_no_team_responsibility(session, employee_id)
+        apply_reporting_changes(session, {employee_id: None}, {employee_id: None})
     for key, value in employee_values(data).items():
         setattr(employee, key, value)
     record_activity(
@@ -159,12 +181,35 @@ def update_employee(employee_id: int, data: EmployeeWrite, session: Session):
 
 
 def delete_employee(employee_id: int, session: Session):
-    employee = require_record(session, Employee, employee_id)
+    employee = lock_employee(session, employee_id)
+    require_no_reports(session, employee_id)
+    require_no_team_responsibility(session, employee_id)
+    if employee.team_id:
+        session.get(Team, employee.team_id).version += 1
+    manager_id = employee.manager_id
     stored_names = [file.stored_name for item in employee.skills for file in item.certificates]
     record_activity(
         session, "employee", "Удалён сотрудник", f"{employee.first_name} {employee.last_name}"
     )
     session.delete(employee)
+    try:
+        reconcile_managers(session, [manager_id])
+    except IntegrityError as exc:
+        session.rollback()
+        raise ConflictError(
+            "Не удалось удалить сотрудника: с ним связан аккаунт или другие записи"
+        ) from exc
     commit(session, "Не удалось удалить сотрудника")
     remove_files(stored_names)
     return None
+
+
+def require_no_team_responsibility(session, employee_id):
+    if session.scalar(
+        select(Team.id)
+        .where((Team.manager_id == employee_id) | (Team.supervisor_id == employee_id))
+        .limit(1)
+    ):
+        raise ConflictError(
+            "Сначала замените руководителя или вышестоящего руководителя в его командах"
+        )

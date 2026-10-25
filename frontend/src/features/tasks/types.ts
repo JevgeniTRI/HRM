@@ -17,6 +17,8 @@ export interface TaskWrite {
   cost: string | null;
   currency: Currency | null;
   due_on: string | null;
+  start_on: string | null;
+  end_on: string | null;
   department_ids: number[];
 }
 export interface Task extends Omit<TaskWrite, 'department_ids'> {
@@ -66,5 +68,7 @@ export interface TaskDraft {
   cost: string;
   currency: Currency;
   dueOn: string;
+  startOn: string;
+  endOn: string;
   departmentIds: number[];
 }

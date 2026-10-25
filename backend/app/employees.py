@@ -3,8 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.dependencies import DB
-from app.schemas import EmployeeDetail, EmployeePage, EmployeeStatus, EmployeeWrite
-from app.services import personnel
+from app.schemas import (
+    EmployeeDetail,
+    EmployeePage,
+    EmployeeStatus,
+    EmployeeWrite,
+    OrganizationWrite,
+)
+from app.services import organization, personnel
 
 router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
@@ -17,8 +23,9 @@ def list_employees(
     status: EmployeeStatus | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 10,
+    is_manager: bool | None = None,
 ):
-    return personnel.list_employees(session, q, department_id, status, page, page_size)
+    return personnel.list_employees(session, q, department_id, status, page, page_size, is_manager)
 
 
 @router.get("/export")
@@ -42,6 +49,14 @@ def create_employee(data: EmployeeWrite, session: DB):
 
 @router.get("/{employee_id}", response_model=EmployeeDetail)
 def read_employee(employee_id: int, session: DB):
+    return personnel.get_employee_detail(session, employee_id)
+
+
+@router.put("/{employee_id}/organization", response_model=EmployeeDetail)
+def update_organization(employee_id: int, data: OrganizationWrite, session: DB):
+    if not session.info["actor"].global_access:
+        raise HTTPException(403, "Назначать руководителей могут только администратор и power_user")
+    organization.update_organization(session, employee_id, data)
     return personnel.get_employee_detail(session, employee_id)
 
 

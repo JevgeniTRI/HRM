@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   BookOpen,
+  CalendarDays,
   Building2,
   ChevronRight,
   Columns3,
@@ -14,6 +15,7 @@ import {
   UserRound,
   LockKeyhole,
   LogOut,
+  Upload,
 } from 'lucide-react';
 import { useAuth, roleLabels } from '../lib/auth';
 import { useMutation } from '@tanstack/react-query';
@@ -24,10 +26,13 @@ import type { FormEvent } from 'react';
 const navigation = [
   { to: '/', label: 'Главная', icon: LayoutDashboard },
   { to: '/employees', label: 'Сотрудники', icon: Users },
+  { to: '/teams', label: 'Команды', icon: Users },
   { to: '/tasks', label: 'Задачи и обучение', icon: Columns3 },
+  { to: '/training-calendar', label: 'Календарь обучений', icon: CalendarDays },
   { to: '/skills', label: 'Навыки', icon: BookOpen },
   { to: '/matrix', label: 'Матрица навыков', icon: Grid2X2 },
   { to: '/departments', label: 'Подразделения', icon: Building2 },
+  { to: '/imports', label: 'Импорт и интеграции', icon: Upload },
 ];
 
 export function Layout() {
@@ -41,13 +46,17 @@ export function Layout() {
       ? navigation
       : [
           ...(user?.role === 'manager'
-            ? [{ to: '/employees', label: 'Мой отдел', icon: Building2 }]
+            ? [
+                { to: '/employees', label: 'Моя команда', icon: Building2 },
+                { to: '/teams', label: 'Команды', icon: Users },
+              ]
             : []),
           {
             to: '/tasks',
-            label: user?.role === 'employee' ? 'Мои задачи' : 'Задачи отдела',
+            label: user?.role === 'employee' ? 'Мои задачи' : 'Задачи команды',
             icon: Columns3,
           },
+          { to: '/training-calendar', label: 'Календарь обучений', icon: CalendarDays },
         ]),
     ...(user?.role === 'admin'
       ? [{ to: '/accounts', label: 'Аккаунты и доступ', icon: ShieldCheck }]
@@ -58,7 +67,9 @@ export function Layout() {
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
-  const active = menu.find((item) => item.to === location.pathname)?.label ?? 'Карточка сотрудника';
+  const active =
+    menu.find((item) => item.to === location.pathname)?.label ??
+    (location.pathname.startsWith('/teams/') ? 'Карточка команды' : 'Карточка сотрудника');
   function submitSearch(event: FormEvent) {
     event.preventDefault();
     navigate(`/employees${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);

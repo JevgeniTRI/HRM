@@ -1,0 +1,234 @@
+.import-tabs,
+.import-actions,
+.import-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.import-panel {
+  padding: 28px;
+  margin-bottom: 22px;
+}
+.import-panel h2 {
+  margin: 0 0 12px;
+}
+.import-panel p {
+  line-height: 1.65;
+  color: var(--text-muted, #777084);
+}
+.import-panel .field-hint {
+  margin: 12px 0 0;
+}
+.import-help {
+  border: 1px solid var(--border, #e7e3ee);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 20px 0;
+}
+.import-help summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.import-file-form,
+.import-form-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(260px, 2fr) auto;
+  align-items: end;
+  gap: 18px;
+}
+.import-file-form label,
+.import-form-grid label,
+.import-secret label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.import-file-form input,
+.import-form-grid input,
+.import-secret input {
+  width: 100%;
+  min-width: 0;
+}
+.import-file-form input[type='file'] {
+  padding: 10px;
+  max-width: 100%;
+  height: 46px;
+}
+.import-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.import-counts > div {
+  background: #f7f5fb;
+  border-radius: 10px;
+  padding: 15px;
+  display: grid;
+  gap: 8px;
+}
+.import-counts span {
+  font-size: 13px;
+  color: #6f667e;
+}
+.import-preview {
+  border-top: 1px solid #e7e3ee;
+  margin-top: 24px;
+  padding-top: 14px;
+}
+.import-issues {
+  background: #fff2f1;
+  border: 1px solid #f0c6c2;
+  padding: 18px;
+  border-radius: 10px;
+  color: #993e35;
+  overflow-wrap: anywhere;
+}
+.import-issues li {
+  margin-top: 10px;
+}
+.import-table-wrap {
+  overflow: auto;
+  margin: 20px 0;
+  max-height: 440px;
+}
+.import-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.import-table-wrap th,
+.import-table-wrap td {
+  text-align: left;
+  padding: 14px;
+  border-bottom: 1px solid #eeeaf2;
+}
+.import-table-wrap th {
+  background: #f8f6fb;
+  position: sticky;
+  top: 0;
+}
+.import-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #edf8f2;
+  padding: 22px;
+  border-radius: 12px;
+  color: #287351;
+  margin-top: 24px;
+}
+.import-success > div {
+  flex: 1;
+}
+.import-key-form fieldset {
+  margin: 20px 0;
+  border: 1px solid #e7e3ee;
+  border-radius: 12px;
+  padding: 16px;
+}
+.import-scopes {
+  margin: 12px 0 0;
+}
+.import-scopes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.import-scopes input {
+  width: auto;
+}
+.import-secret {
+  background: #f4effb;
+  border: 1px solid #d6c7ef;
+  padding: 22px;
+  border-radius: 12px;
+  margin-top: 24px;
+}
+.import-secret label {
+  margin: 14px 0;
+}
+.import-secret input {
+  font-family: monospace;
+}
+.import-secret button {
+  margin-right: 10px;
+}
+.import-key-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 0;
+  border-top: 1px solid #eeeaf2;
+}
+.import-key-list {
+  margin-top: 24px;
+}
+.import-key-list p {
+  margin: 6px 0;
+}
+.import-endpoints {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  margin: 24px 0;
+}
+.import-endpoints dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.import-panel code {
+  font-size: 13px;
+  background: #f4f1f8;
+  padding: 3px 6px;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
+}
+.import-history details {
+  border-top: 1px solid #e7e3ee;
+  padding: 20px 0;
+}
+.import-history summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  cursor: pointer;
+}
+.import-history summary span {
+  font-size: 13px;
+}
+.import-run-status {
+  border-radius: 20px;
+  padding: 6px 12px;
+  background: #edf8f2;
+  color: #287351;
+}
+.import-run-status.failed {
+  background: #fff2f1;
+  color: #993e35;
+}
+@media (max-width: 900px) {
+  .import-file-form,
+  .import-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .import-panel {
+    padding: 20px;
+  }
+  .import-endpoints {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .import-key-list > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .import-tabs .button {
+    flex: 1;
+    white-space: nowrap;
+  }
+}

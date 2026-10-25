@@ -1,4 +1,6 @@
-from sqlalchemy import func, select
+from datetime import date
+
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ConflictError, NotFoundError
@@ -44,10 +46,28 @@ def task_query(
 
 def list_tasks(session: Session, *, page: int, page_size: int, **filters):
     query = task_query(**filters).where(task_scope(session))
+    return task_page(session, query, page, page_size, Task.updated_at.desc(), Task.id.desc())
+
+
+def calendar_tasks(
+    session: Session, *, from_on: date, to_on: date, page: int, page_size: int, **filters
+):
+    filters["is_training"] = True
+    query = task_query(**filters).where(
+        task_scope(session),
+        or_(
+            Task.start_on.is_(None),
+            and_(Task.start_on <= to_on, Task.end_on >= from_on),
+        ),
+    )
+    return task_page(session, query, page, page_size, Task.start_on.asc().nulls_last(), Task.id)
+
+
+def task_page(session: Session, query, page: int, page_size: int, *ordering):
     total = session.scalar(select(func.count()).select_from(query.subquery())) or 0
     items = session.scalars(
         query.options(selectinload(Task.departments), selectinload(Task.assignee))
-        .order_by(Task.updated_at.desc(), Task.id.desc())
+        .order_by(*ordering)
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()

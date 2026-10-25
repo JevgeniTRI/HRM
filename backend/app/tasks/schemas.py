@@ -29,10 +29,19 @@ class TaskWrite(BaseModel):
     cost: Cost | None = None
     currency: Currency | None = None
     due_on: date | None = None
+    start_on: date | None = None
+    end_on: date | None = None
     department_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=100)
 
     @model_validator(mode="after")
     def validate_training_and_cost(self):
+        if (self.start_on is None) != (self.end_on is None):
+            raise ValueError("Укажите начало и окончание обучения")
+        if self.start_on is not None:
+            if self.learning_source is None:
+                raise ValueError("Период проведения доступен только для обучения")
+            if self.end_on < self.start_on:
+                raise ValueError("Окончание обучения не может быть раньше начала")
         validate_task(
             learning_source=self.learning_source,
             learning_format=self.learning_format,
@@ -69,6 +78,8 @@ class TaskRead(ORMModel):
     cost: Decimal | None
     currency: Currency | None
     due_on: date | None
+    start_on: date | None
+    end_on: date | None
     departments: list[DepartmentRead]
     version: int
     created_at: datetime

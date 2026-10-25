@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import type { Assessment, Skill } from '../types';
 import { api } from '../lib/api';
 import { assessmentState } from '../lib/assessments';
+import { levelLabel, levelOption, levelDescription, scaleLabel } from '../lib/skillScales';
 import { fullName } from '../lib/format';
 import { useEmployeeFilters } from '../lib/useEmployeeFilters';
 import { AssessmentForm } from '../components/AssessmentForm';
@@ -80,7 +81,9 @@ export function MatrixPage() {
                   {skills.map((skill) => (
                     <th key={skill.id}>
                       <span>{skill.name}</span>
-                      <small>{skill.category}</small>
+                      <small>
+                        {skill.category} · {scaleLabel(skill.scale)}
+                      </small>
                     </th>
                   ))}
                 </tr>
@@ -103,13 +106,13 @@ export function MatrixPage() {
                       const label = !assessment
                         ? 'не назначен'
                         : assessment.current_level === null
-                          ? `не оценён, цель ${assessment.target_level}`
-                          : `уровень ${assessment.current_level}, цель ${assessment.target_level}`;
+                          ? `не оценён, цель ${levelLabel(skill.scale, assessment.target_level)}`
+                          : `уровень ${levelLabel(skill.scale, assessment.current_level)}, цель ${levelLabel(skill.scale, assessment.target_level)}`;
                       return (
                         <td key={skill.id}>
                           <button
                             className={`matrix-cell ${state}`}
-                            title={`${skill.name}: ${label}`}
+                            title={`${skill.name}: ${label}${assessment ? `\nТекущий: ${assessment.current_level === null ? 'Не оценён' : `${levelOption(skill.scale, assessment.current_level)}\n${levelDescription(skill.scale, assessment.current_level)}`}\nЦель: ${levelOption(skill.scale, assessment.target_level)}\n${levelDescription(skill.scale, assessment.target_level)}` : ''}`}
                             aria-label={`${fullName(employee)}, ${skill.name}: ${label}`}
                             onClick={() => setCell({ employeeId: employee.id, skill, assessment })}
                           >
@@ -117,8 +120,12 @@ export function MatrixPage() {
                               '—'
                             ) : (
                               <>
-                                <strong>{assessment.current_level ?? '?'}</strong>
-                                <span> / {assessment.target_level}</span>
+                                <strong>
+                                  {assessment.current_level === null
+                                    ? '?'
+                                    : levelLabel(skill.scale, assessment.current_level)}
+                                </strong>
+                                <span> / {levelLabel(skill.scale, assessment.target_level)}</span>
                               </>
                             )}
                           </button>

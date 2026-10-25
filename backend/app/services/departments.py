@@ -1,8 +1,8 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.errors import ConflictError
-from app.models import Account, Department, Employee
+from app.models import Account, Department, Employee, Team
 from app.permissions import department_scope, employee_scope
 from app.schemas import DepartmentManager, DepartmentRead, DepartmentSummary, DepartmentWrite
 from app.services.common import commit, record_activity, require_record
@@ -21,10 +21,10 @@ def department_summaries(session) -> list[DepartmentSummary]:
     if rows:
         managers = session.execute(
             select(Employee.id, Employee.first_name, Employee.last_name, Employee.department_id)
-            .join(Account, Account.employee_id == Employee.id)
+            .outerjoin(Account, Account.employee_id == Employee.id)
             .where(
-                Account.role == "manager",
-                Account.is_active.is_(True),
+                Employee.is_manager.is_(True),
+                or_(Account.id.is_(None), Account.is_active.is_(True)),
                 Employee.department_id.in_([department.id for department, _ in rows]),
                 employee_scope(session),
             )
@@ -63,6 +63,8 @@ def update_department(department_id: int, data: DepartmentWrite, session: Sessio
 
 def delete_department(department_id: int, session: Session):
     department = require_record(session, Department, department_id)
+    if session.scalar(select(Team.id).where(Team.department_id == department_id).limit(1)):
+        raise ConflictError("Сначала удалите или освободите команды этого подразделения")
     if session.scalar(
         select(task_departments.c.task_id)
         .where(task_departments.c.department_id == department_id)
