@@ -72,6 +72,8 @@ class EmployeeRead(ORMModel):
     last_name: str
     email: str
     position: str
+    has_photo: bool
+    photo_version: int
     team_id: int | None
     is_manager: bool
     manager_id: int | None

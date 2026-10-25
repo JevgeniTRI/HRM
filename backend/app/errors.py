@@ -12,3 +12,7 @@ class ValidationError(ValueError):
 
 class PayloadTooLargeError(Exception):
     """The uploaded document exceeds the allowed size."""
+
+
+class ForbiddenError(Exception):
+    """The authenticated actor cannot perform the requested domain operation."""

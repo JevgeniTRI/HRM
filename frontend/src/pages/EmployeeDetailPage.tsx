@@ -20,7 +20,6 @@ import { dateLabel, fullName, timestamp } from '../lib/format';
 import { levelOption } from '../lib/skillScales';
 import { useRefreshData } from '../lib/queries';
 import {
-  Avatar,
   Empty,
   ErrorState,
   FormError,
@@ -34,6 +33,7 @@ import { AssessmentForm } from '../components/AssessmentForm';
 import { CertificateForm, CertificateList } from '../components/Certificates';
 import { SkillLevelsDialog } from '../components/SkillLevelsDialog';
 import { OrganizationSection } from '../components/OrganizationSection';
+import { ProfilePhoto } from '../components/ProfilePhoto';
 
 export function EmployeeDetailPage() {
   const { user, globalAccess } = useAuth();
@@ -85,7 +85,7 @@ export function EmployeeDetailPage() {
         )}
       </PageHeader>
       <section className="card profile-card">
-        <Avatar employee={person} size="large" />
+        <ProfilePhoto employee={person} canEdit={globalAccess || user?.employee_id === person.id} />
         <div className="profile-summary">
           <h2>
             {fullName(person)}
@@ -146,7 +146,7 @@ export function EmployeeDetailPage() {
           />
         ) : (
           <div className="table-scroll">
-            <table>
+            <table className="skills-table">
               <thead>
                 <tr>
                   <th>Навык</th>

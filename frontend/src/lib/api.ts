@@ -90,6 +90,14 @@ export const api = {
       body: body(data),
     }),
   deleteEmployee: (id: number) => request<void>(`/employees/${id}`, { method: 'DELETE' }),
+  uploadEmployeePhoto: (id: number, file: File) => {
+    const data = new FormData();
+    data.append('file', file);
+    return request<void>(`/employees/${id}/photo`, { method: 'POST', body: data });
+  },
+  deleteEmployeePhoto: (id: number) =>
+    request<void>(`/employees/${id}/photo`, { method: 'DELETE' }),
+  employeePhotoUrl: (id: number, version: number) => `/api/employees/${id}/photo?v=${version}`,
   skills: () => request<SkillSummary[]>('/skills'),
   saveSkill: (data: Omit<Skill, 'id'>, id?: number) =>
     request<Skill>(`/skills${id ? `/${id}` : ''}`, {

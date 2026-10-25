@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 
 from app.dependencies import DB
 from app.schemas import (
@@ -10,7 +11,7 @@ from app.schemas import (
     EmployeeWrite,
     OrganizationWrite,
 )
-from app.services import organization, personnel
+from app.services import organization, personnel, profile_photos
 
 router = APIRouter(prefix="/employees", tags=["Сотрудники"])
 
@@ -50,6 +51,36 @@ def create_employee(data: EmployeeWrite, session: DB):
 @router.get("/{employee_id}", response_model=EmployeeDetail)
 def read_employee(employee_id: int, session: DB):
     return personnel.get_employee_detail(session, employee_id)
+
+
+@router.get("/{employee_id}/photo")
+def read_employee_photo(employee_id: int, session: DB):
+    employee, path = profile_photos.read_photo(session, employee_id)
+    return FileResponse(
+        path,
+        media_type=employee.photo_content_type,
+        content_disposition_type="inline",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+            "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+        },
+    )
+
+
+@router.post("/{employee_id}/photo", status_code=204)
+def upload_employee_photo(employee_id: int, session: DB, file: Annotated[UploadFile, File()]):
+    try:
+        profile_photos.upload_photo(session, employee_id, file.file, file.filename)
+    finally:
+        file.file.close()
+    return Response(status_code=204)
+
+
+@router.delete("/{employee_id}/photo", status_code=204)
+def delete_employee_photo(employee_id: int, session: DB):
+    profile_photos.delete_photo(session, employee_id)
+    return Response(status_code=204)
 
 
 @router.put("/{employee_id}/organization", response_model=EmployeeDetail)

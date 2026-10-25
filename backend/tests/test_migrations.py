@@ -91,6 +91,12 @@ def test_populated_upgrade_keeps_assessments_and_relationships(tmp_path, monkeyp
         )
         assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
         assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
+        assert connection.execute(
+            text(
+                "SELECT photo_stored_name, photo_content_type, photo_size, photo_version "
+                "FROM employees"
+            )
+        ).one() == (None, None, None, 0)
     with pytest.raises(IntegrityError), engine.begin() as connection:
         connection.execute(text("UPDATE employees SET status='invalid' WHERE id=1"))
     with pytest.raises(IntegrityError), engine.begin() as connection:

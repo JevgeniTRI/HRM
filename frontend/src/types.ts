@@ -18,6 +18,8 @@ export interface Employee {
   last_name: string;
   email: string;
   position: string;
+  has_photo: boolean;
+  photo_version: number;
   is_manager: boolean;
   manager_id: number | null;
   team_id: number | null;
@@ -29,7 +31,14 @@ export interface Employee {
 }
 export type EmployeeWrite = Omit<
   Employee,
-  'id' | 'department' | 'is_manager' | 'manager_id' | 'organization_role' | 'team_id'
+  | 'id'
+  | 'department'
+  | 'has_photo'
+  | 'photo_version'
+  | 'is_manager'
+  | 'manager_id'
+  | 'organization_role'
+  | 'team_id'
 >;
 export interface SkillScale {
   type: 'numeric' | 'letter';

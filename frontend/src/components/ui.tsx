@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertCircle, ChevronLeft, ChevronRight, LoaderCircle, Search, X } from 'lucide-react';
 import type { Employee, EmployeeStatus } from '../types';
@@ -8,10 +8,23 @@ export function Avatar({
   employee,
   size = 'normal',
 }: {
-  employee: Pick<Employee, 'first_name' | 'last_name'>;
+  employee: Pick<Employee, 'id' | 'first_name' | 'last_name' | 'has_photo' | 'photo_version'>;
   size?: 'normal' | 'large';
 }) {
   const color = (employee.first_name.charCodeAt(0) + employee.last_name.charCodeAt(0)) % 5;
+  const [failedPhoto, setFailedPhoto] = useState(false);
+  useEffect(() => setFailedPhoto(false), [employee.id, employee.photo_version]);
+  if (employee.has_photo && !failedPhoto) {
+    return (
+      <span className={`avatar avatar-photo avatar-${size}`}>
+        <img
+          src={`/api/employees/${employee.id}/photo?v=${employee.photo_version}`}
+          alt={`${employee.first_name} ${employee.last_name}`}
+          onError={() => setFailedPhoto(true)}
+        />
+      </span>
+    );
+  }
   return (
     <span className={`avatar avatar-${color} avatar-${size}`} aria-hidden="true">
       {initials(employee)}

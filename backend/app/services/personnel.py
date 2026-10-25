@@ -16,7 +16,7 @@ from app.services.organization import (
     reconcile_managers,
     require_no_reports,
 )
-from app.storage import remove_files
+from app.storage import remove_files, remove_profile_photo
 
 
 def employee_query(q: str = "", department_id: int | None = None, status: str | None = None):
@@ -188,6 +188,7 @@ def delete_employee(employee_id: int, session: Session):
         session.get(Team, employee.team_id).version += 1
     manager_id = employee.manager_id
     stored_names = [file.stored_name for item in employee.skills for file in item.certificates]
+    photo_stored_name = employee.photo_stored_name
     record_activity(
         session, "employee", "Удалён сотрудник", f"{employee.first_name} {employee.last_name}"
     )
@@ -201,6 +202,7 @@ def delete_employee(employee_id: int, session: Session):
         ) from exc
     commit(session, "Не удалось удалить сотрудника")
     remove_files(stored_names)
+    remove_profile_photo(photo_stored_name)
     return None
 
 

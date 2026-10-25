@@ -17,7 +17,13 @@ from app import (
 from app.auth import LoginLimiter, accounts_router, authorize
 from app.auth import router as auth_router
 from app.config import get_settings
-from app.errors import ConflictError, NotFoundError, PayloadTooLargeError, ValidationError
+from app.errors import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    PayloadTooLargeError,
+    ValidationError,
+)
 from app.security import MAX_REQUEST_BODY_SIZE, BrowserRequestMiddleware
 from app.services.data_import import ImportRejected
 from app.tasks.router import router as tasks_router
@@ -55,6 +61,10 @@ def create_app() -> FastAPI:
     @app.exception_handler(PayloadTooLargeError)
     async def payload_too_large(_, error: PayloadTooLargeError):
         return JSONResponse(status_code=413, content={"detail": str(error)})
+
+    @app.exception_handler(ForbiddenError)
+    async def forbidden(_, error: ForbiddenError):
+        return JSONResponse(status_code=403, content={"detail": str(error)})
 
     app.add_middleware(RequestBodyLimitMiddleware, max_body_size=MAX_REQUEST_BODY_SIZE)
 

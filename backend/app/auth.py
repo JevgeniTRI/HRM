@@ -355,7 +355,8 @@ def authorize(request: Request, account: CurrentAccount, session: DB):
     if actor.global_access:
         return
     employee_match = re.fullmatch(
-        r"/employees/(\d+)(?:/skills/\d+(?:/certificates(?:/\d+(?:/file)?)?)?)?", path
+        r"/employees/(\d+)(?:/photo|/skills/\d+(?:/certificates(?:/\d+(?:/file)?)?)?)?",
+        path,
     )
     if employee_match:
         employee_id = int(employee_match[1])

@@ -41,6 +41,12 @@ class Employee(Base):
         CheckConstraint(
             "manager_id IS NULL OR manager_id != id", name="ck_employees_not_own_manager"
         ),
+        CheckConstraint(
+            "(photo_stored_name IS NULL AND photo_content_type IS NULL AND photo_size IS NULL) OR "
+            "(photo_stored_name IS NOT NULL AND photo_content_type IS NOT NULL "
+            "AND photo_size > 0 AND photo_size <= 5242880)",
+            name="ck_employees_profile_photo",
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     first_name: Mapped[str] = mapped_column(String(80))
@@ -68,6 +74,10 @@ class Employee(Base):
     about: Mapped[str] = mapped_column(Text, default="")
     experience: Mapped[str] = mapped_column(Text, default="")
     education: Mapped[str] = mapped_column(Text, default="")
+    photo_stored_name: Mapped[str | None] = mapped_column(String(50), unique=True)
+    photo_content_type: Mapped[str | None] = mapped_column(String(30))
+    photo_size: Mapped[int | None]
+    photo_version: Mapped[int] = mapped_column(default=0, server_default="0")
     search_text: Mapped[str] = mapped_column(String(720))
     department_id: Mapped[int] = mapped_column(
         ForeignKey("departments.id", ondelete="RESTRICT"), index=True
@@ -85,6 +95,10 @@ class Employee(Base):
         if not self.is_manager:
             return "employee"
         return "head" if self.manager_id is None else "intermediate"
+
+    @property
+    def has_photo(self) -> bool:
+        return self.photo_stored_name is not None
 
 
 class Team(Base):
